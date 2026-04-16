@@ -4,7 +4,7 @@ import { OrbitControls, Center, View } from '@react-three/drei';
 import * as THREE from 'three';
 
 
-export default function BrainModel({ diagnosis, tumorLocation, onHotspotClick, phase, isDeconstructed, renderMode, isSpatialExpanded }) {
+export default function BrainModel({ diagnosis, tumorLocation, onHotspotClick, phase, renderMode, isSpatialExpanded }) {
   const pointsRef = useRef();
   const groupRef = useRef();
   const headGroupRef = useRef();
@@ -139,7 +139,7 @@ export default function BrainModel({ diagnosis, tumorLocation, onHotspotClick, p
     const colorAttr = pointsRef.current.geometry.attributes.color.array;
     const lerpFactor = (phase === 'forming' || phase === 'docked') ? 3.0 * delta : 4.5 * delta;
 
-    const targetYOffset = isDeconstructed ? 6.0 : 0.0;
+    const targetYOffset = 0.0;
     brainOffsetRef.current.y = THREE.MathUtils.lerp(brainOffsetRef.current.y, targetYOffset, 3.0 * delta);
 
     const targetXSplit = isSpatialExpanded ? 4.5 : 0.0;
