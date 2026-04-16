@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 import torch
 import numpy as np
 import cv2
@@ -18,6 +18,7 @@ from utils import (
     numpy_to_base64
 )
 from report import generate_clinical_report
+from llm_engine import generate_clinical_narrative, chat_with_oracle
 
 # ==========================================
 # 1. SETUP & CONFIGURATION
@@ -64,9 +65,11 @@ class AnalysisResult(BaseModel):
     probabilities: Dict[str, float]
     images: Dict[str, str]  # Base64 strings: original, enhanced, heatmap
     tumor_location: Optional[Dict[str, float]] = None
+    clinical_narrative: Optional[str] = None
 
 class ChatRequest(BaseModel):
     message: str
+    history: Optional[List[Dict[str, str]]] = None
     analysis_context: Optional[Dict] = None
 
 # ==========================================
@@ -127,8 +130,8 @@ async def analyze_mri(file: UploadFile = File(...)):
         # 6. Result Packaging
         results = {
             "label": CLASSES[idx],
-            "confidence": all_probs[idx],
-            "probabilities": {CLASSES[i]: all_probs[i] for i in range(len(CLASSES))},
+            "confidence": float(all_probs[idx]),
+            "probabilities": {CLASSES[i]: float(all_probs[i]) for i in range(len(CLASSES))},
             "images": {
                 "original": numpy_to_base64(img_np),
                 "enhanced": numpy_to_base64(enhanced_np),
@@ -136,6 +139,13 @@ async def analyze_mri(file: UploadFile = File(...)):
             },
             "tumor_location": tumor_loc
         }
+        
+        # 7. Generate Clinical Narrative via BioMistral
+        try:
+            results["clinical_narrative"] = generate_clinical_narrative(results)
+        except Exception as e:
+            print(f"Narrative generation failed: {e}")
+            results["clinical_narrative"] = f"BioMistral API Error. Note: Primary diagnosis is {results['label']}."
         
         return results
 
@@ -155,6 +165,19 @@ async def get_report(data: AnalysisResult):
     except Exception as e:
         print(f"Error generating report: {e}")
         raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
+
+@app.post("/api/chat")
+async def chat_endpoint(data: ChatRequest):
+    try:
+        if not data.analysis_context:
+            return {"response": "Please upload and analyze an MRI scan first before consulting the Nexus Oracle."}
+            
+        history_msgs = data.history if data.history else []
+        response = chat_with_oracle(data.message, history_msgs, data.analysis_context)
+        return {"response": response}
+    except Exception as e:
+        print(f"Chat failed: {e}")
+        raise HTTPException(status_code=500, detail="Chat engine failed.")
 
 # ==========================================
 # 4. EXECUTION

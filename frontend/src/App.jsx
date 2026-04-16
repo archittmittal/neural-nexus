@@ -55,7 +55,11 @@ function App() {
         const response = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: userMsg, analysis_context: result })
+          body: JSON.stringify({ 
+            message: userMsg, 
+            history: chatMessages,
+            analysis_context: result 
+          })
         });
         const data = await response.json();
         setChatMessages(prev => [...prev, { role: 'oracle', content: data.response }]);
@@ -164,6 +168,11 @@ function App() {
         setSliderValue(1.0);
         setZoomLevel(1.0);
         setIsAnalyzing(false);
+        
+        if (data.clinical_narrative) {
+          setChatMessages([{ role: 'oracle', content: data.clinical_narrative }]);
+          setIsChatOpen(true); // Auto-open Oracle to show the impression
+        }
       }, 2400); 
     } catch (error) {
       console.error(error);
