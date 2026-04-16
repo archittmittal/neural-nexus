@@ -68,6 +68,19 @@ class AnalysisResult(BaseModel):
 # 3. ENDPOINTS
 # ==========================================
 
+@app.get("/")
+async def root():
+    return {
+        "message": "Neural Nexus AI Diagnostic Core is Online",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/api/health",
+            "analyze": "/api/analyze (POST)",
+            "report": "/api/report (POST)"
+        },
+        "documentation": "/docs"
+    }
+
 @app.get("/api/health")
 async def health_check():
     return {
