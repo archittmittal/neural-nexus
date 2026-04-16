@@ -4,7 +4,7 @@ import { OrbitControls, Center, View } from '@react-three/drei';
 import * as THREE from 'three';
 
 
-export default function BrainModel({ diagnosis, phase, isDeconstructed, renderMode }) {
+export default function BrainModel({ diagnosis, phase, isDeconstructed, renderMode, isSpatialExpanded }) {
   const pointsRef = useRef();
   const groupRef = useRef();
   const headGroupRef = useRef();
