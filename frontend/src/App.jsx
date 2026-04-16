@@ -34,6 +34,81 @@ function App() {
   const [isSpatialExpanded, setIsSpatialExpanded] = useState(false);
   const [isDeconstructed, setIsDeconstructed] = useState(false);
   const [selectedHotspot, setSelectedHotspot] = useState(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'oracle', content: 'Nexus Oracle initialized. Awaiting diagnostic input.' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+
+  const NexusOracle = () => {
+    if (!result) return null;
+    
+    const sendMessage = async () => {
+      if (!chatInput.trim()) return;
+      const userMsg = chatInput;
+      setChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+      setChatInput('');
+      setIsTyping(true);
+
+      try {
+        const response = await fetch(`${API_BASE}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: userMsg, analysis_context: result })
+        });
+        const data = await response.json();
+        setChatMessages(prev => [...prev, { role: 'oracle', content: data.response }]);
+      } catch (e) {
+        setChatMessages(prev => [...prev, { role: 'oracle', content: "SYSTEM ERROR: Neural link disrupted." }]);
+      } finally {
+        setIsTyping(false);
+      }
+    };
+
+    return (
+      <motion.div 
+        className={`nexus-oracle-sidecar ${isChatOpen ? 'expanded' : 'collapsed'}`}
+        layout
+      >
+        <div className="oracle-header" onClick={() => setIsChatOpen(!isChatOpen)}>
+          <Brain size={18} className={isTyping ? "pulse-cyan" : ""} />
+          <span>NEXUS ORACLE</span>
+          {!isChatOpen && <div className="unread-dot" />}
+        </div>
+        
+        <AnimatePresence>
+          {isChatOpen && (
+            <motion.div 
+              className="oracle-body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 400, opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+            >
+              <div className="chat-history">
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`msg ${msg.role}`}>
+                    <span className="msg-prefix">{msg.role === 'oracle' ? 'ORCL' : 'CLIN'} : </span>
+                    {msg.content}
+                  </div>
+                ))}
+                {isTyping && <div className="msg oracle typing">PENDING AI RETRIEVAL...</div>}
+              </div>
+              <div className="chat-controls">
+                <input 
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  placeholder="Ask Oracle..."
+                />
+                <button onClick={sendMessage} disabled={isTyping}>SEND</button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    );
+  };
 
   const TargetHUD = ({ location }) => {
     if (!location) return null;
@@ -461,6 +536,15 @@ function App() {
               )}
             </AnimatePresence>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* FLOATING BOTTOM RIGHT - NEXUS ORACLE */}
+      <AnimatePresence>
+        {result && (
+          <div className="hud-module bottom-right">
+            <NexusOracle />
+          </div>
         )}
       </AnimatePresence>
 

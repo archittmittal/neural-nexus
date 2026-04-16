@@ -63,7 +63,11 @@ class AnalysisResult(BaseModel):
     confidence: float
     probabilities: Dict[str, float]
     images: Dict[str, str]  # Base64 strings: original, enhanced, heatmap
-    tumor_location: Dict[str, float] = None
+    tumor_location: Optional[Dict[str, float]] = None
+
+class ChatRequest(BaseModel):
+    message: str
+    analysis_context: Optional[Dict] = None
 
 # ==========================================
 # 3. ENDPOINTS
@@ -77,7 +81,8 @@ async def root():
         "endpoints": {
             "health": "/api/health",
             "analyze": "/api/analyze (POST)",
-            "report": "/api/report (POST)"
+            "report": "/api/report (POST)",
+            "chat": "/api/chat (POST)"
         },
         "documentation": "/docs"
     }
