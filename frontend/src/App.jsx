@@ -33,6 +33,25 @@ function App() {
   const constraintsRef = useRef(null);                 // Advanced Interaction: Drag bounds
   const [isSpatialExpanded, setIsSpatialExpanded] = useState(false);
   const [isDeconstructed, setIsDeconstructed] = useState(false);
+  const [selectedHotspot, setSelectedHotspot] = useState(null);
+
+  const TargetHUD = ({ location }) => {
+    if (!location) return null;
+    return (
+      <motion.div 
+        className="clinical-target-crosshair"
+        initial={{ opacity: 0, scale: 2 }}
+        animate={{ opacity: 1, scale: 1 }}
+        style={{ 
+          left: `${location.x * 100}%`,
+          top: `${location.y * 100}%`
+        }}
+      >
+        <div className="crosshair-ring" />
+        <div className="crosshair-id">TRGT-01</div>
+      </motion.div>
+    );
+  };
 
   const handleFileUpload = (e) => {
     const uploadedFile = e.target.files[0];
@@ -229,6 +248,9 @@ function App() {
                  style={{ opacity: activeMode === 'gradcam' ? sliderValue : 0 }}
                />
             )}
+            
+            {/* 2D TARGET HUD */}
+            <TargetHUD location={selectedHotspot} />
           </motion.div>
         </div>
       ) : (
@@ -337,6 +359,7 @@ function App() {
                   <BrainModel 
                     diagnosis={result?.label} 
                     tumorLocation={result?.tumor_location}
+                    onHotspotClick={(loc) => setSelectedHotspot(loc)}
                     phase={!isAnalyzing ? 'docked' : (scanStatus.includes('INITIALIZING') ? 'dispersed' : 'forming')}
                     isDeconstructed={isDeconstructed}
                     isSpatialExpanded={isSpatialExpanded}
