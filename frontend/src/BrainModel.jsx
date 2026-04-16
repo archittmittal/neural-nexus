@@ -4,7 +4,7 @@ import { OrbitControls, Center, View } from '@react-three/drei';
 import * as THREE from 'three';
 
 
-export default function BrainModel({ diagnosis, tumorLocation, phase, isDeconstructed, renderMode, isSpatialExpanded }) {
+export default function BrainModel({ diagnosis, tumorLocation, onHotspotClick, phase, isDeconstructed, renderMode, isSpatialExpanded }) {
   const pointsRef = useRef();
   const groupRef = useRef();
   const headGroupRef = useRef();
@@ -205,7 +205,17 @@ export default function BrainModel({ diagnosis, tumorLocation, phase, isDeconstr
   const TumorPoints = () => {
     if (!tumorCoords || phase !== 'docked') return null;
     return (
-        <points ref={tumorPointsRef}>
+        <points 
+            ref={tumorPointsRef}
+            onClick={(e) => {
+                e.stopPropagation();
+                if (onHotspotClick && tumorLocation) {
+                    onHotspotClick(tumorLocation);
+                }
+            }}
+            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+        >
             <bufferGeometry>
                 <bufferAttribute attach="attributes-position" count={1500} array={tumorParticles.positions} itemSize={3} />
                 <bufferAttribute attach="attributes-color" count={1500} array={tumorParticles.colors} itemSize={3} />
