@@ -1062,6 +1062,29 @@ input[type=range].styled-slider:focus {
   color: var(--text-muted);
 }
 
+.pred-risk-explainer {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.exp-item {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.exp-label {
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+}
+
 /* BioMistral Narrative Card */
 .pred-narrative-card {
   border-color: rgba(168, 85, 247, 0.15);

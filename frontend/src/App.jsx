@@ -252,6 +252,20 @@ function App() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Layman's Explainer */}
+                    <div className="pred-risk-explainer">
+                      <div className="exp-item">
+                        <span className="exp-label">IRREGULARITY:</span> High values mean the tumor has scattered, uneven borders (often more severe).
+                      </div>
+                      <div className="exp-item">
+                        <span className="exp-label">AREA:</span> Indicates how much of the brain scan the active tumor region occupies.
+                      </div>
+                      <div className="exp-item">
+                        <span className="exp-label">ENTROPY:</span> Measures visual chaos. Higher entropy implies complex, aggressive tissue growth.
+                      </div>
+                    </div>
+                  </div>
                   </div>
                 )}
 
