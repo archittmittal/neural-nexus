@@ -98,3 +98,21 @@ The system demonstrated a **91.88% confusion matrix accuracy**, proof of its the
 
 
 ---
+##	System Architecture Overview
+
+	Neural Nexus is a state-of-the-art AI diagnostic platform designed to assist clinicians in the detection, classification, and reporting of brain tumors from MRI scans. The system follows a decoupled architecture with a high-performance Python backend and a cinematic, interactive React frontend.
+	1. AI Diagnostic Core (Backend)Engine: Built with FastAPI, the backend orchestrates the diagnostic pipeline.
+	Model Architecture: Uses a custom-trained EfficientNet-V2-S / ResNet-50 CNN, optimized for high-accuracy classification across four primary classes: Glioma, Meningioma, Pituitary, and No Tumor.
+	Interpretability (Grad-CAM): Implements Gradient-weighted Class Activation Mapping to generate visual heatmaps, highlighting the specific regions in the MRI scan that drove the AI's classification decision.
+	Clinical Narrative (BioMistral): Integrates the BioMistral LLM to transform raw diagnostic telemetry and risk metrics into human-readable clinical narratives and risk assessments.
+	Reporting: Automatically generates dynamic, clinician-ready PDF reports using fpdf2.
+	2. Clinical HUD & Visualization (Frontend)Framework: Developed using React and Vite, prioritizing a high-density, "Mission Control" aesthetic.
+	Cross-Modality Viewer: Supports multiple diagnostic views:RAW: The original MRI input.ENHANCED: CLAHE-processed image for better contrast.
+	GRAD-CAM: Heatmap overlay at varying intensities.
+	SPLIT-VIEW: Interactive wipe separator for side-by-side comparison
+	Spatial Copilot (3D Brain): An interactive 3D model powered by React Three Fiber (Three.js). It maps the 2D tumor location from the scan into a 3D coordinate system, providing anatomical context for the detection.
+	Dynamic Telemetry: Real-time HUD displaying confidence scores, classification results, and clinical risk assessments.
+	 Deployment & Scalability
+Frontend:https://neural-nexus-git-feature-un-e2e0e7-purvansh-s-projects-3c13a221.vercel.app/
+Backed :https://huggingface.co/spaces/purvansh01/neural-nexus-backend
+	Infrastructure: The backend is designed for containerized deployment (e.g., Hugging Face Spaces via Docker), while the frontend is optimized for edge deployment (e.g., Vercel).
