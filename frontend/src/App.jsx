@@ -32,7 +32,6 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(1.0);     // Advanced Interaction: Zoom target
   const constraintsRef = useRef(null);                 // Advanced Interaction: Drag bounds
   const [isSpatialExpanded, setIsSpatialExpanded] = useState(false);
-  const [isSpatialExpanded, setIsSpatialExpanded] = useState(false);
   const [selectedHotspot, setSelectedHotspot] = useState(null);
   const [isInsightOpen, setIsInsightOpen] = useState(false);
 
