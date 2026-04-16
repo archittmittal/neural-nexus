@@ -42,85 +42,46 @@ def _generate_text(prompt: str, max_new_tokens: int = 512, temperature: float = 
             return "Error: Unable to generate response due to API limits or model unavailability."
 
 
-def generate_clinical_narrative(analysis_data: dict, patient_meta: dict = None) -> str:
+def generate_clinical_narrative(analysis_data: dict, risk_metrics: dict, patient_meta: dict = None) -> str:
     """
-    Takes ResNet-50 output + Grad-CAM metadata and generates 
-    a radiologist-style clinical narrative via BioMistral.
+    Takes ResNet-50 output + risk metrics and generates 
+    an AI explanation of the prediction and clinical risk.
     """
-    tumor_loc = analysis_data.get('tumor_location')
-    location_desc = "Not detected"
-    if tumor_loc and analysis_data['label'] != 'No Tumor':
-        hemisphere = "Right hemisphere" if tumor_loc.get('x', 0.5) > 0.5 else "Left hemisphere"
-        location_desc = f"{hemisphere} (x:{tumor_loc.get('x'):.2f}, y:{tumor_loc.get('y'):.2f})"
-
     # Format the probability distribution
     probs = ""
     for cls, prob in analysis_data['probabilities'].items():
-        probs += f"  - {cls}: {prob:.1%}\n"
+        if prob > 0.01:
+            probs += f"  - {cls}: {prob:.1%}\n"
 
     patient_context = f"PATIENT CONTEXT:\n{patient_meta}\n" if patient_meta else ""
 
-    prompt = f"""<s>[INST] You are a board-certified neuroradiologist reviewing an AI-assisted brain MRI analysis. Generate a structured clinical impression. Keep it professional, concise, and do not use markdown features like bold or italics unnecessarily, plain text formatting is preferred.
+    prompt = f"""<s>[INST] You are an expert AI clinical risk predictor analyzing an MRI scan. Explain the prediction and the patient's associated risk based on the provided mathematical metrics. Keep it highly professional and concise. Do not use markdown formatting.
 
-ANALYSIS DATA:
+MODEL PREDICTION:
 - Primary AI Diagnosis: {analysis_data['label']}
 - System Confidence: {analysis_data['confidence']:.1%}
-- Probability Distribution:
 {probs}
-- Grad-CAM Peak Activation Localization: {location_desc}
+
+EXTRACTED RISK METRICS:
+- Tumor Irregularity/Entropy (0-1): {risk_metrics['irregularity_ratio']} (Higher implies scattered, malignant boundaries)
+- Relative Activation Area: {risk_metrics['activation_area']:.1%} of brain volume
+- Composite Clinical Risk Score: {risk_metrics['risk_score']}/100
 
 {patient_context}
-Generate exactly 4 sections:
-1. Radiological Impression (2-3 sentences analyzing the finding)
-2. Differential Considerations (Discuss the probabilities)
-3. Recommended Follow-up Actions
-4. Clinical Caveats (Remind that this is an AI-assisted finding)
+Generate exactly 3 sections:
+1. Prediction Explanation: Briefly explain why the model made this prediction based on the confidence and probabilities.
+2. Risk Assessment: Analyze the provided Risk Metrics (Entropy, Area, Score) and explain what they indicate about the tumor's severity.
+3. Clinical Recommendation: Provide a brief recommendation based on the risk score.
 
-Do NOT provide a definitive diagnosis. Frame it as AI-assisted findings requiring professional clinical correlation. [/INST]
+Frame it as AI-assisted findings requiring professional clinical correlation. [/INST]
 """
 
-    narrative = _generate_text(prompt, max_new_tokens=512, temperature=0.3)
+    narrative = _generate_text(prompt, max_new_tokens=400, temperature=0.3)
     
     # If the response failed heavily:
     if "Error:" in narrative and "API limits" in narrative:
-        return f"System Note: The natural language narrative engine is currently unavailable due to API rate limits or model deployment status. Primary diagnosis remains {analysis_data['label']} with {analysis_data['confidence']:.1%} confidence."
+        return f"Prediction Explanation: The model predicted {analysis_data['label']} with {analysis_data['confidence']:.1%} confidence. The calculated Clinical Risk Score is {risk_metrics['risk_score']}/100 based on an irregularity ratio of {risk_metrics['irregularity_ratio']}."
         
     return narrative
 
-
-def chat_with_oracle(message: str, history: list, analysis_context: dict = None) -> str:
-    """
-    Powers the Nexus Oracle chat using BioMistral.
-    """
-    
-    context_str = ""
-    if analysis_context:
-        context_str = f"""
-Current MRI Analysis Context:
-- Primary Diagnosis: {analysis_context.get('label')}
-- Confidence: {analysis_context.get('confidence', 0):.1%}
-- Clinical Narrative so far: {analysis_context.get('clinical_narrative', 'N/A')}
-"""
-
-    # Format history into the prompt
-    # Llama-style instruction format since BioMistral is Mistral-based
-    prompt = f"<s>[INST] You are the Nexus Oracle, an advanced AI clinical assistant. Your role is to answer questions from a clinician about a recent MRI brain scan analysis. Be concise, highly clinical, and professional.\n{context_str}\n"
-    
-    for msg in history:
-        role = msg.get("role")
-        content = msg.get("content")
-        if role in ["clin", "user", "clinician"]:
-            prompt += f"{content} [/INST] "
-        else:
-            prompt += f"{content} </s><s>[INST] "
-            
-    # Add the current message
-    prompt += f"{message} [/INST]"
-    
-    response = _generate_text(prompt, max_new_tokens=300, temperature=0.5)
-    
-    if "Error:" in response and "API limits" in response:
-        return "SYSTEM ERROR: Neural link disrupted. (Hugging Face API rate limit reached or model offline. Please provide an HF_TOKEN in the .env file)."
-        
-    return response
 

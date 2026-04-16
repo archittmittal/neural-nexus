@@ -11,14 +11,14 @@ import os
 
 from model import load_official_model
 from utils import (
-    GradCAM, 
     get_transforms, 
     apply_clahe, 
     overlay_heatmap, 
-    numpy_to_base64
+    numpy_to_base64,
+    extract_risk_metrics
 )
 from report import generate_clinical_report
-from llm_engine import generate_clinical_narrative, chat_with_oracle
+from llm_engine import generate_clinical_narrative
 
 # ==========================================
 # 1. SETUP & CONFIGURATION
@@ -65,12 +65,8 @@ class AnalysisResult(BaseModel):
     probabilities: Dict[str, float]
     images: Dict[str, str]  # Base64 strings: original, enhanced, heatmap
     tumor_location: Optional[Dict[str, float]] = None
+    risk_metrics: Optional[Dict] = None
     clinical_narrative: Optional[str] = None
-
-class ChatRequest(BaseModel):
-    message: str
-    history: Optional[List[Dict[str, str]]] = None
-    analysis_context: Optional[Dict] = None
 
 # ==========================================
 # 3. ENDPOINTS
@@ -84,8 +80,7 @@ async def root():
         "endpoints": {
             "health": "/api/health",
             "analyze": "/api/analyze (POST)",
-            "report": "/api/report (POST)",
-            "chat": "/api/chat (POST)"
+            "report": "/api/report (POST)"
         },
         "documentation": "/docs"
     }
@@ -127,7 +122,10 @@ async def analyze_mri(file: UploadFile = File(...)):
             "y": float(y / heatmap.shape[0])
         } if CLASSES[idx] != "No Tumor" else None
 
-        # 6. Result Packaging
+        # 6. Risk metrics computation
+        risk_metrics = extract_risk_metrics(heatmap, float(all_probs[idx]), CLASSES[idx])
+
+        # 7. Result Packaging
         results = {
             "label": CLASSES[idx],
             "confidence": float(all_probs[idx]),
@@ -137,14 +135,15 @@ async def analyze_mri(file: UploadFile = File(...)):
                 "enhanced": numpy_to_base64(enhanced_np),
                 "heatmap": numpy_to_base64(heatmap_overlay)
             },
-            "tumor_location": tumor_loc
+            "tumor_location": tumor_loc,
+            "risk_metrics": risk_metrics
         }
         
-        # 7. Generate Clinical Narrative via BioMistral
+        # 8. Generate Clinical Narrative / Risk Explanation via BioMistral
         try:
-            results["clinical_narrative"] = generate_clinical_narrative(results)
+            results["clinical_narrative"] = generate_clinical_narrative(results, risk_metrics)
         except Exception as e:
-            print(f"Narrative generation failed: {e}")
+            print(f"Risk Explainer generation failed: {e}")
             results["clinical_narrative"] = f"BioMistral API Error. Note: Primary diagnosis is {results['label']}."
         
         return results
@@ -165,19 +164,6 @@ async def get_report(data: AnalysisResult):
     except Exception as e:
         print(f"Error generating report: {e}")
         raise HTTPException(status_code=500, detail=f"Report generation failed: {str(e)}")
-
-@app.post("/api/chat")
-async def chat_endpoint(data: ChatRequest):
-    try:
-        if not data.analysis_context:
-            return {"response": "Please upload and analyze an MRI scan first before consulting the Nexus Oracle."}
-            
-        history_msgs = data.history if data.history else []
-        response = chat_with_oracle(data.message, history_msgs, data.analysis_context)
-        return {"response": response}
-    except Exception as e:
-        print(f"Chat failed: {e}")
-        raise HTTPException(status_code=500, detail="Chat engine failed.")
 
 # ==========================================
 # 4. EXECUTION

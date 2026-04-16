@@ -88,3 +88,54 @@ def numpy_to_base64(img_np):
     buffer = io.BytesIO()
     pil_img.save(buffer, format="PNG")
     return base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+# ==========================================
+# 4. CLINICAL RISK EXTRACTION
+# ==========================================
+
+def extract_risk_metrics(heatmap, confidence, label):
+    """
+    Computes mathematical clinical risk metrics from the AI attention map.
+    """
+    if label == "No Tumor":
+        return {
+            "entropy": 0.0,
+            "irregularity_ratio": 0.0,
+            "activation_area": 0.0,
+            "risk_score": 5
+        }
+        
+    flat_heat = heatmap.flatten()
+    active_pixels = flat_heat[flat_heat > 0.15] # Threshold focus area
+    
+    # 1. Image Entropy (Measures morphological irregularity)
+    if len(active_pixels) > 0:
+        p = active_pixels / np.sum(active_pixels)
+        entropy = -np.sum(p * np.log2(p + 1e-9))
+    else:
+        entropy = 0.0
+        
+    # Normalize entropy roughly to 0-1
+    normalized_entropy = min(max((entropy - 4.0) / 8.0, 0.0), 1.0)
+        
+    # 2. Activation Size
+    activation_area = len(active_pixels) / len(flat_heat)
+    
+    # 3. Composite Risk Score (1-100)
+    risk = 0.0
+    if label == "Glioma": risk += 45
+    elif label == "Meningioma": risk += 25
+    elif label == "Pituitary": risk += 20
+        
+    risk += confidence * 15
+    risk += min(activation_area * 150, 20) # Caps at 20 points for size
+    risk += normalized_entropy * 20
+    
+    final_risk = min(max(int(risk), 10), 99)
+    
+    return {
+        "entropy": round(float(entropy), 2),
+        "irregularity_ratio": round(float(normalized_entropy), 2),
+        "activation_area": round(float(activation_area), 3),
+        "risk_score": final_risk
+    }
