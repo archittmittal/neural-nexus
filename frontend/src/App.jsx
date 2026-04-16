@@ -336,6 +336,7 @@ function App() {
                 <Suspense fallback={null}>
                   <BrainModel 
                     diagnosis={result?.label} 
+                    tumorLocation={result?.tumor_location}
                     phase={!isAnalyzing ? 'docked' : (scanStatus.includes('INITIALIZING') ? 'dispersed' : 'forming')}
                     isDeconstructed={isDeconstructed}
                     isSpatialExpanded={isSpatialExpanded}

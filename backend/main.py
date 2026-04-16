@@ -63,6 +63,7 @@ class AnalysisResult(BaseModel):
     confidence: float
     probabilities: Dict[str, float]
     images: Dict[str, str]  # Base64 strings: original, enhanced, heatmap
+    tumor_location: Dict[str, float] = None
 
 # ==========================================
 # 3. ENDPOINTS
@@ -111,7 +112,14 @@ async def analyze_mri(file: UploadFile = File(...)):
         enhanced_np = apply_clahe(img_np)
         heatmap_overlay = overlay_heatmap(img_np, heatmap, alpha=0.5)
         
-        # 5. Result Packaging
+        # 5. Extract tumor center (highest activation)
+        y, x = np.unravel_index(np.argmax(heatmap), heatmap.shape)
+        tumor_loc = {
+            "x": float(x / heatmap.shape[1]),
+            "y": float(y / heatmap.shape[0])
+        } if CLASSES[idx] != "No Tumor" else None
+
+        # 6. Result Packaging
         results = {
             "label": CLASSES[idx],
             "confidence": all_probs[idx],
@@ -120,7 +128,8 @@ async def analyze_mri(file: UploadFile = File(...)):
                 "original": numpy_to_base64(img_np),
                 "enhanced": numpy_to_base64(enhanced_np),
                 "heatmap": numpy_to_base64(heatmap_overlay)
-            }
+            },
+            "tumor_location": tumor_loc
         }
         
         return results

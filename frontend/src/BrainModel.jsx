@@ -4,7 +4,7 @@ import { OrbitControls, Center, View } from '@react-three/drei';
 import * as THREE from 'three';
 
 
-export default function BrainModel({ diagnosis, phase, isDeconstructed, renderMode, isSpatialExpanded }) {
+export default function BrainModel({ diagnosis, tumorLocation, phase, isDeconstructed, renderMode, isSpatialExpanded }) {
   const pointsRef = useRef();
   const groupRef = useRef();
   const headGroupRef = useRef();
@@ -12,13 +12,27 @@ export default function BrainModel({ diagnosis, phase, isDeconstructed, renderMo
   const splitXRef = useRef(0);
   const particleCount = 120000;
   
-  const tumorLightPos = useMemo(() => {
-    if (diagnosis === 'Meningioma') return [0, 2.0, 0]; 
-    if (diagnosis === 'Pituitary') return [0, -0.6, 0.5]; 
-    if (diagnosis === 'Glioma') return [0.8, 0.4, 0.4]; 
-    return null;
-  }, [diagnosis]);
+  // 1. Dynamic Tumor Positioning Logic
+  const tumorCoords = useMemo(() => {
+    if (!tumorLocation || diagnosis === 'No Tumor') return null;
+    
+    const tx = (tumorLocation.x - 0.5) * 5.2; // Map 0-1 to brain width
+    const ty = (0.5 - tumorLocation.y) * 3.6; // Map 0-1 to brain height (inverted Y)
+    
+    // Heuristic for depth (Z-axis) based on pathology
+    let tz = 0;
+    if (diagnosis === 'Pituitary') tz = 0.8;
+    else if (diagnosis === 'Meningioma') tz = -2.2;
+    else if (diagnosis === 'Glioma') tz = 0.5;
+    
+    return [tx, ty, tz];
+  }, [tumorLocation, diagnosis]);
 
+  const tumorLightPos = useMemo(() => {
+    return tumorCoords || null;
+  }, [tumorCoords]);
+
+  // 2. Main Brain Points Generation
   const { currentPositions, targetPositions, chaosPositions, colors, baseColors } = useMemo(() => {
     const cp = new Float32Array(particleCount * 3);
     const tp = new Float32Array(particleCount * 3);
@@ -37,7 +51,7 @@ export default function BrainModel({ diagnosis, phase, isDeconstructed, renderMo
        if (isCerebellum) {
            r = Math.pow(Math.random(), 1/4); 
            tx = r * Math.sin(phi) * Math.cos(theta) * 2.2; 
-           ty = r * Math.sin(phi) * Math.sin(theta) * 1.2 - 2.2; // Anchored lower
+           ty = r * Math.sin(phi) * Math.sin(theta) * 1.2 - 2.2; 
            tz = r * Math.cos(phi) * 1.8 - 2.0; 
            const wrinkle = 1.0 + 0.03 * Math.sin(theta * 50) * Math.cos(phi * 50);
            tx *= wrinkle; ty *= wrinkle; tz *= wrinkle;
@@ -94,17 +108,40 @@ export default function BrainModel({ diagnosis, phase, isDeconstructed, renderMo
     return { currentPositions: currP, targetPositions: tp, chaosPositions: cp, colors, baseColors };
   }, [diagnosis]);
 
+  // 3. Dedicated Tumor Dots Generation
+  const tumorParticles = useMemo(() => {
+    const count = 1500;
+    const pos = new Float32Array(count * 3);
+    const cols = new Float32Array(count * 3);
+    const red = new THREE.Color('#ff0033'); // Bright Clinical Red
+
+    if (tumorCoords) {
+      for (let i = 0; i < count; i++) {
+        const r = Math.pow(Math.random(), 0.5) * 0.5; // Dense core
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(Math.random() * 2 - 1);
+        pos[i * 3] = tumorCoords[0] + r * Math.sin(phi) * Math.cos(theta);
+        pos[i * 3 + 1] = tumorCoords[1] + r * Math.sin(phi) * Math.sin(theta);
+        pos[i * 3 + 2] = tumorCoords[2] + r * Math.cos(phi);
+        cols[i * 3] = red.r;
+        cols[i * 3 + 1] = red.g;
+        cols[i * 3 + 2] = red.b;
+      }
+    }
+    return { positions: pos, colors: cols };
+  }, [tumorCoords]);
+
+  const tumorPointsRef = useRef();
+
   useFrame((state, delta) => {
     if (!pointsRef.current || !groupRef.current) return;
     const positions = pointsRef.current.geometry.attributes.position.array;
     const colorAttr = pointsRef.current.geometry.attributes.color.array;
     const lerpFactor = (phase === 'forming' || phase === 'docked') ? 3.0 * delta : 4.5 * delta;
 
-    // Smoothly animate the Deconstructed offset
     const targetYOffset = isDeconstructed ? 6.0 : 0.0;
     brainOffsetRef.current.y = THREE.MathUtils.lerp(brainOffsetRef.current.y, targetYOffset, 3.0 * delta);
 
-    // Smoothly animate the Split-View offset
     const targetXSplit = isSpatialExpanded ? 4.5 : 0.0;
     splitXRef.current = THREE.MathUtils.lerp(splitXRef.current, targetXSplit, 2.5 * delta);
 
@@ -127,27 +164,33 @@ export default function BrainModel({ diagnosis, phase, isDeconstructed, renderMo
     pointsRef.current.geometry.attributes.position.needsUpdate = true;
     pointsRef.current.geometry.attributes.color.needsUpdate = true;
 
-    // PHYSICS FREEZE: No movement when expanded for diagnostic stability
+    // Handle Tumor Dots Animation
+    if (tumorPointsRef.current && tumorCoords) {
+        const tPos = tumorPointsRef.current.geometry.attributes.position.array;
+        for (let i = 0; i < 1500; i++) {
+            const i3 = i * 3;
+            // Sync with brain movement
+            tPos[i3] = THREE.MathUtils.lerp(tPos[i3], tumorParticles.positions[i3] + splitXRef.current, lerpFactor * 1.5);
+            tPos[i3+1] = THREE.MathUtils.lerp(tPos[i3+1], tumorParticles.positions[i3+1] + brainOffsetRef.current.y, lerpFactor * 1.5);
+            tPos[i3+2] = THREE.MathUtils.lerp(tPos[i3+2], tumorParticles.positions[i3+2], lerpFactor * 1.5);
+        }
+        tumorPointsRef.current.geometry.attributes.position.needsUpdate = true;
+        // Pulse Effect
+        const pulse = 1.0 + Math.sin(state.clock.elapsedTime * 6) * 0.15;
+        tumorPointsRef.current.scale.set(pulse, pulse, pulse);
+    }
+
     if (!isSpatialExpanded) {
       if (phase === 'forming') groupRef.current.rotation.y += delta * 6.0;
       else if (phase === 'dispersed') groupRef.current.rotation.y += delta * 1.5;
       else groupRef.current.rotation.y += delta * 0.3;
 
-      const pulse = 1.0 + Math.sin(state.clock.elapsedTime * 2.5) * 0.012;
-      groupRef.current.scale.set(pulse, pulse, pulse);
+      const scalePulse = 1.0 + Math.sin(state.clock.elapsedTime * 2.5) * 0.012;
+      groupRef.current.scale.set(scalePulse, scalePulse, scalePulse);
     } else {
-      groupRef.current.scale.set(1, 1, 1); // Reset scale in split view
+      groupRef.current.scale.set(1, 1, 1);
     }
   });
-
-  const pointsMaterial = useMemo(() => new THREE.PointsMaterial({
-    size: 0.010,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.3,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  }), []);
 
   const BrainPoints = () => (
     <points ref={pointsRef}>
@@ -155,21 +198,35 @@ export default function BrainModel({ diagnosis, phase, isDeconstructed, renderMo
         <bufferAttribute attach="attributes-position" count={particleCount} array={currentPositions} itemSize={3} />
         <bufferAttribute attach="attributes-color" count={particleCount} array={baseColors} itemSize={3} />
       </bufferGeometry>
-      <primitive object={pointsMaterial} attach="material" />
+      <pointsMaterial size={0.010} vertexColors={true} transparent={true} opacity={0.3} blending={THREE.AdditiveBlending} depthWrite={false} />
     </points>
   );
+
+  const TumorPoints = () => {
+    if (!tumorCoords || phase !== 'docked') return null;
+    return (
+        <points ref={tumorPointsRef}>
+            <bufferGeometry>
+                <bufferAttribute attach="attributes-position" count={1500} array={tumorParticles.positions} itemSize={3} />
+                <bufferAttribute attach="attributes-color" count={1500} array={tumorParticles.colors} itemSize={3} />
+            </bufferGeometry>
+            <pointsMaterial size={0.065} vertexColors={true} transparent={true} opacity={0.9} blending={THREE.AdditiveBlending} depthWrite={false} />
+        </points>
+    );
+  };
 
   return (
     <group ref={groupRef}>
       <ambientLight intensity={1.5} />
       <pointLight position={[5, 10, 5]} intensity={1.5} />
       <pointLight position={[-5, -10, -5]} intensity={1.0} color="#00f2ff" />
+      
       {tumorLightPos && phase === 'docked' && (
-         <pointLight position={tumorLightPos} color="#ff3366" intensity={25.0} distance={6.0} decay={1.2} />
+         <pointLight position={tumorLightPos} color="#ff0033" intensity={40.0} distance={8.0} decay={1.5} />
       )}
       
-      {/* BRAIN CLOUD */}
       <BrainPoints />
+      <TumorPoints />
 
       <OrbitControls enableZoom={true} enablePan={false} enableRotate={true} autoRotate={false} minDistance={2} maxDistance={15} />
     </group>
