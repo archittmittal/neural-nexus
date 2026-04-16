@@ -32,7 +32,7 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(1.0);     // Advanced Interaction: Zoom target
   const constraintsRef = useRef(null);                 // Advanced Interaction: Drag bounds
   const [isSpatialExpanded, setIsSpatialExpanded] = useState(false);
-  const [isDeconstructed, setIsDeconstructed] = useState(false);
+  const [isSpatialExpanded, setIsSpatialExpanded] = useState(false);
   const [selectedHotspot, setSelectedHotspot] = useState(null);
   const [isInsightOpen, setIsInsightOpen] = useState(false);
 
@@ -405,7 +405,6 @@ function App() {
                     tumorLocation={result?.tumor_location}
                     onHotspotClick={(loc) => setSelectedHotspot(loc)}
                     phase={!isAnalyzing ? 'docked' : (scanStatus.includes('INITIALIZING') ? 'dispersed' : 'forming')}
-                    isDeconstructed={isDeconstructed}
                     isSpatialExpanded={isSpatialExpanded}
                   />
                 </Suspense>
@@ -465,14 +464,6 @@ function App() {
                 onClick={() => handleModeChange('gradcam')}
               >
                 GRAD-CAM
-              </button>
-              <div className="hud-separator" />
-              <button 
-                className={`deconstruct-toggle ${isDeconstructed ? 'active accent-red' : ''}`}
-                onClick={() => setIsDeconstructed(!isDeconstructed)}
-                title="Deconstruct View"
-              >
-                {isDeconstructed ? 'RECONSTRUCT' : 'DECONSTRUCT'}
               </button>
             </div>
 

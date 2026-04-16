@@ -139,7 +139,7 @@ async def analyze_mri(file: UploadFile = File(...)):
             "risk_metrics": risk_metrics
         }
         
-        # 8. Generate Clinical Narrative / Risk Explanation via BioMistral
+        # 8. Generate Clinical Risk Explanation
         try:
             results["clinical_narrative"] = generate_clinical_narrative(results, risk_metrics)
         except Exception as e:

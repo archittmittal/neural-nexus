@@ -5,6 +5,8 @@ from PIL import Image
 from torchvision import transforms
 import io
 import base64
+import io
+import base64
 
 # ==========================================
 # 1. CORE UTILITIES
@@ -139,3 +141,4 @@ def extract_risk_metrics(heatmap, confidence, label):
         "activation_area": round(float(activation_area), 3),
         "risk_score": final_risk
     }
+
