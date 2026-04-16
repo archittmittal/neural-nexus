@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 import torch
 import numpy as np
 import cv2
@@ -11,13 +11,14 @@ import os
 
 from model import load_official_model
 from utils import (
-    GradCAM, 
     get_transforms, 
     apply_clahe, 
     overlay_heatmap, 
-    numpy_to_base64
+    numpy_to_base64,
+    extract_risk_metrics
 )
 from report import generate_clinical_report
+from llm_engine import generate_clinical_narrative
 
 # ==========================================
 # 1. SETUP & CONFIGURATION
@@ -63,7 +64,9 @@ class AnalysisResult(BaseModel):
     confidence: float
     probabilities: Dict[str, float]
     images: Dict[str, str]  # Base64 strings: original, enhanced, heatmap
-    tumor_location: Dict[str, float] = None
+    tumor_location: Optional[Dict[str, float]] = None
+    risk_metrics: Optional[Dict] = None
+    clinical_narrative: Optional[str] = None
 
 # ==========================================
 # 3. ENDPOINTS
@@ -119,18 +122,29 @@ async def analyze_mri(file: UploadFile = File(...)):
             "y": float(y / heatmap.shape[0])
         } if CLASSES[idx] != "No Tumor" else None
 
-        # 6. Result Packaging
+        # 6. Risk metrics computation
+        risk_metrics = extract_risk_metrics(heatmap, float(all_probs[idx]), CLASSES[idx])
+
+        # 7. Result Packaging
         results = {
             "label": CLASSES[idx],
-            "confidence": all_probs[idx],
-            "probabilities": {CLASSES[i]: all_probs[i] for i in range(len(CLASSES))},
+            "confidence": float(all_probs[idx]),
+            "probabilities": {CLASSES[i]: float(all_probs[i]) for i in range(len(CLASSES))},
             "images": {
                 "original": numpy_to_base64(img_np),
                 "enhanced": numpy_to_base64(enhanced_np),
                 "heatmap": numpy_to_base64(heatmap_overlay)
             },
-            "tumor_location": tumor_loc
+            "tumor_location": tumor_loc,
+            "risk_metrics": risk_metrics
         }
+        
+        # 8. Generate Clinical Narrative / Risk Explanation via BioMistral
+        try:
+            results["clinical_narrative"] = generate_clinical_narrative(results, risk_metrics)
+        except Exception as e:
+            print(f"Risk Explainer generation failed: {e}")
+            results["clinical_narrative"] = f"BioMistral API Error. Note: Primary diagnosis is {results['label']}."
         
         return results
 
