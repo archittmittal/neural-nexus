@@ -7,7 +7,14 @@ import {
   Download,
   SplitSquareHorizontal,
   Maximize2,
-  Minimize2
+  Minimize2,
+  X,
+  AlertTriangle,
+  ShieldCheck,
+  TrendingUp,
+  ChevronRight,
+  BarChart3,
+  Scan
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Canvas } from '@react-three/fiber';
@@ -28,52 +35,271 @@ function App() {
   
   // Interactive Mechanics State
   const [activeMode, setActiveMode] = useState('gradcam');
-  const [sliderValue, setSliderValue] = useState(1.0); // Acts as opacity OR wipe percentage
-  const [zoomLevel, setZoomLevel] = useState(1.0);     // Advanced Interaction: Zoom target
-  const constraintsRef = useRef(null);                 // Advanced Interaction: Drag bounds
+  const [sliderValue, setSliderValue] = useState(1.0);
+  const [zoomLevel, setZoomLevel] = useState(1.0);
+  const constraintsRef = useRef(null);
   const [isSpatialExpanded, setIsSpatialExpanded] = useState(false);
   const [selectedHotspot, setSelectedHotspot] = useState(null);
-  const [isInsightOpen, setIsInsightOpen] = useState(false);
+  
+  // Prediction Panel State
+  const [isPredictionOpen, setIsPredictionOpen] = useState(false);
 
-  const RiskExplainerPanel = () => {
-    if (!result || !result.clinical_narrative || !result.risk_metrics) return null;
-    
+  // ==========================================
+  // RISK LEVEL HELPERS
+  // ==========================================
+  const getRiskColor = (score) => {
+    if (score >= 75) return '#ff3366';
+    if (score >= 50) return '#ffb400';
+    if (score >= 25) return '#00f2ff';
+    return '#00ff9d';
+  };
+
+  const getRiskLabel = (score) => {
+    if (score >= 75) return 'HIGH RISK';
+    if (score >= 50) return 'MODERATE RISK';
+    if (score >= 25) return 'LOW RISK';
+    return 'MINIMAL';
+  };
+
+  const getDiagnosisColor = (label) => {
+    if (label === 'No Tumor') return '#00ff9d';
+    if (label === 'Glioma') return '#ff3366';
+    if (label === 'Meningioma') return '#ff6633';
+    return '#ffb400'; // Pituitary
+  };
+
+  // ==========================================
+  // PREDICTION ANALYSIS PANEL
+  // ==========================================
+  const PredictionPanel = () => {
+    if (!result) return null;
+    const rm = result.risk_metrics || {};
+    const hasTumor = result.label !== 'No Tumor';
+    const riskScore = rm.risk_score || 0;
+    const riskColor = getRiskColor(riskScore);
+
+    // Sort probabilities highest first
+    const sortedProbs = Object.entries(result.probabilities || {})
+      .sort((a, b) => b[1] - a[1]);
+
     return (
-      <motion.div 
-        className={`nexus-oracle-sidecar ${isInsightOpen ? 'expanded' : 'collapsed'}`}
-        layout
-      >
-        <div className="oracle-header" onClick={() => setIsInsightOpen(!isInsightOpen)}>
-          <Brain size={18} className="accent-cyan" />
-          <span>AI INSIGHT & RISK</span>
-          {!isInsightOpen && <div className="unread-dot" />}
-        </div>
-        
-        <AnimatePresence>
-          {isInsightOpen && (
+      <AnimatePresence>
+        {isPredictionOpen && (
+          <motion.div 
+            className="prediction-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
             <motion.div 
-              className="oracle-body risk-panel-body"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 400, opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              style={{ overflowY: 'auto', padding: '1rem', whiteSpace: 'pre-wrap', lineHeight: '1.5', fontSize: '0.85rem' }}
+              className="prediction-panel"
+              initial={{ x: '100%', opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: '100%', opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             >
-              <div style={{ marginBottom: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.5)', borderRadius: '8px', borderLeft: '4px solid var(--accent-cyan)' }}>
-                 <h3 style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.7rem', letterSpacing: '1px' }}>CLINICAL RISK SCORE</h3>
-                 <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>
-                    {result.risk_metrics.risk_score}<span style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>/100</span>
-                 </div>
+              {/* Panel Header */}
+              <div className="pred-header">
+                <div className="pred-header-left">
+                  <Scan size={20} className="accent-cyan" />
+                  <div>
+                    <h2 className="pred-header-title">TUMOR PREDICTION ANALYSIS</h2>
+                    <p className="pred-header-sub">AI-Powered Clinical Assessment</p>
+                  </div>
+                </div>
+                <button className="pred-close-btn" onClick={() => setIsPredictionOpen(false)}>
+                  <X size={18} />
+                </button>
               </div>
-              <div style={{ color: 'var(--text-primary)' }}>
-                {result.clinical_narrative}
+
+              {/* Panel Body */}
+              <div className="pred-body">
+                
+                {/* PRIMARY DIAGNOSIS CARD */}
+                <div className="pred-card pred-diagnosis-card">
+                  <div className="pred-card-header">
+                    <span className="pred-card-label">PRIMARY DIAGNOSIS</span>
+                    <div className={`pred-status-badge ${hasTumor ? 'danger' : 'safe'}`}>
+                      {hasTumor ? <AlertTriangle size={12} /> : <ShieldCheck size={12} />}
+                      {hasTumor ? 'TUMOR DETECTED' : 'CLEAR'}
+                    </div>
+                  </div>
+                  <div className="pred-diagnosis-row">
+                    <span 
+                      className="pred-diagnosis-label"
+                      style={{ color: getDiagnosisColor(result.label) }}
+                    >
+                      {result.label}
+                    </span>
+                    <span className="pred-confidence-value">
+                      {(result.confidence * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="pred-confidence-bar-track">
+                    <motion.div 
+                      className="pred-confidence-bar-fill"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${result.confidence * 100}%` }}
+                      transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
+                      style={{ background: getDiagnosisColor(result.label) }}
+                    />
+                  </div>
+                </div>
+
+                {/* PROBABILITY DISTRIBUTION */}
+                <div className="pred-card">
+                  <div className="pred-card-header">
+                    <span className="pred-card-label">CLASSIFICATION PROBABILITIES</span>
+                    <BarChart3 size={14} className="pred-card-icon" />
+                  </div>
+                  <div className="pred-prob-list">
+                    {sortedProbs.map(([cls, prob], idx) => (
+                      <div className="pred-prob-row" key={cls}>
+                        <div className="pred-prob-info">
+                          <span className={`pred-prob-rank ${idx === 0 ? 'top' : ''}`}>
+                            {idx === 0 ? '▸' : ' '}
+                          </span>
+                          <span className="pred-prob-cls">{cls}</span>
+                        </div>
+                        <div className="pred-prob-bar-track">
+                          <motion.div 
+                            className="pred-prob-bar-fill"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${prob * 100}%` }}
+                            transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 + idx * 0.1 }}
+                            style={{ 
+                              background: idx === 0 ? getDiagnosisColor(cls) : 'rgba(255,255,255,0.15)',
+                              boxShadow: idx === 0 ? `0 0 12px ${getDiagnosisColor(cls)}40` : 'none'
+                            }}
+                          />
+                        </div>
+                        <span className={`pred-prob-pct ${idx === 0 ? 'top' : ''}`}>
+                          {(prob * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* RISK METRICS (only if tumor detected) */}
+                {hasTumor && rm.risk_score !== undefined && (
+                  <div className="pred-card pred-risk-card">
+                    <div className="pred-card-header">
+                      <span className="pred-card-label">CLINICAL RISK ASSESSMENT</span>
+                      <TrendingUp size={14} className="pred-card-icon" />
+                    </div>
+                    
+                    <div className="pred-risk-grid">
+                      {/* Risk Score Gauge */}
+                      <div className="pred-risk-gauge-block">
+                        <div 
+                          className="pred-risk-gauge"
+                          style={{ 
+                            '--risk-pct': `${riskScore}%`,
+                            '--risk-color': riskColor
+                          }}
+                        >
+                          <div className="pred-risk-gauge-inner">
+                            <span className="pred-risk-score">{riskScore}</span>
+                            <span className="pred-risk-max">/100</span>
+                          </div>
+                        </div>
+                        <span className="pred-risk-level" style={{ color: riskColor }}>
+                          {getRiskLabel(riskScore)}
+                        </span>
+                      </div>
+
+                      {/* Risk Metrics */}
+                      <div className="pred-risk-metrics">
+                        <div className="pred-risk-metric">
+                          <span className="pred-risk-metric-label">IRREGULARITY</span>
+                          <div className="pred-risk-metric-bar-track">
+                            <motion.div 
+                              className="pred-risk-metric-bar"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(rm.irregularity_ratio || 0) * 100}%` }}
+                              transition={{ duration: 0.8, delay: 0.5 }}
+                              style={{ background: (rm.irregularity_ratio || 0) > 0.5 ? '#ff3366' : '#00f2ff' }}
+                            />
+                          </div>
+                          <span className="pred-risk-metric-val">{(rm.irregularity_ratio || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="pred-risk-metric">
+                          <span className="pred-risk-metric-label">ACTIVATION AREA</span>
+                          <div className="pred-risk-metric-bar-track">
+                            <motion.div 
+                              className="pred-risk-metric-bar"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${Math.min((rm.activation_area || 0) * 100 * 3, 100)}%` }}
+                              transition={{ duration: 0.8, delay: 0.6 }}
+                              style={{ background: '#ffb400' }}
+                            />
+                          </div>
+                          <span className="pred-risk-metric-val">{((rm.activation_area || 0) * 100).toFixed(1)}%</span>
+                        </div>
+                        <div className="pred-risk-metric">
+                          <span className="pred-risk-metric-label">ENTROPY</span>
+                          <div className="pred-risk-metric-bar-track">
+                            <motion.div 
+                              className="pred-risk-metric-bar"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${Math.min(((rm.entropy || 0) / 12) * 100, 100)}%` }}
+                              transition={{ duration: 0.8, delay: 0.7 }}
+                              style={{ background: '#a855f7' }}
+                            />
+                          </div>
+                          <span className="pred-risk-metric-val">{(rm.entropy || 0).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Layman's Explainer */}
+                    <div className="pred-risk-explainer">
+                      <div className="exp-item">
+                        <span className="exp-label">IRREGULARITY:</span> High values mean the tumor has scattered, uneven borders (often more severe).
+                      </div>
+                      <div className="exp-item">
+                        <span className="exp-label">AREA:</span> Indicates how much of the brain scan the active tumor region occupies.
+                      </div>
+                      <div className="exp-item">
+                        <span className="exp-label">ENTROPY:</span> Measures visual chaos. Higher entropy implies complex, aggressive tissue growth.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* BIOMISTRAL AI NARRATIVE */}
+                {result.clinical_narrative && (
+                  <div className="pred-card pred-narrative-card">
+                    <div className="pred-card-header">
+                      <span className="pred-card-label">AI CLINICAL NARRATIVE</span>
+                      <div className="pred-bio-badge">
+                        <Brain size={10} />
+                        BioMistral-7B
+                      </div>
+                    </div>
+                    <div className="pred-narrative-body">
+                      {result.clinical_narrative.split('\n').filter(l => l.trim()).map((paragraph, idx) => (
+                        <p key={idx} className="pred-narrative-p">{paragraph.trim()}</p>
+                      ))}
+                    </div>
+                    <div className="pred-narrative-disclaimer">
+                      <AlertTriangle size={12} />
+                      AI-generated interpretation for clinical decision support only. Must be validated by a qualified radiologist.
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     );
   };
 
+  // ==========================================
+  // TARGET CROSSHAIR HUD
+  // ==========================================
   const TargetHUD = ({ location }) => {
     if (!location) return null;
     return (
@@ -92,12 +318,16 @@ function App() {
     );
   };
 
+  // ==========================================
+  // HANDLERS
+  // ==========================================
   const handleFileUpload = (e) => {
     const uploadedFile = e.target.files[0];
     if (uploadedFile) {
       setFile(uploadedFile);
       setResult(null);
-      setZoomLevel(1.0); // reset zoom on new upload
+      setZoomLevel(1.0);
+      setIsPredictionOpen(false);
     }
   };
 
@@ -112,6 +342,7 @@ function App() {
     try {
       setTimeout(() => setScanStatus("EXTRACTING FEATURES VIA RESNET-50..."), 800);
       setTimeout(() => setScanStatus("GENERATING GRAD-CAM HEATMAP..."), 1600);
+      setTimeout(() => setScanStatus("RUNNING BIOMISTRAL RISK ANALYSIS..."), 2200);
 
       const response = await fetch(`${API_BASE}/api/analyze`, {
         method: 'POST',
@@ -128,11 +359,9 @@ function App() {
         setSliderValue(1.0);
         setZoomLevel(1.0);
         setIsAnalyzing(false);
-        
-        if (data.clinical_narrative) {
-          setIsInsightOpen(true); // Auto-open risk panel to show the impression
-        }
-      }, 2400); 
+        // Auto-open prediction panel when results arrive
+        setIsPredictionOpen(true);
+      }, 2800); 
     } catch (error) {
       console.error(error);
       alert("AI Core Analysis Failed. Please check backend status.");
@@ -178,66 +407,42 @@ function App() {
     setPdfPreviewUrl(null);
   };
 
-  // Wheel zoom handler
   const handleWheel = (e) => {
     if (!result) return;
-    // Map scroll wheel to zoom (0.001 dampening for smooth scrolling)
     const zoomDelta = e.deltaY * -0.001;
-    // Clamp zoom strictly between 1x and 5x
     setZoomLevel(prev => Math.min(Math.max(1.0, prev + zoomDelta), 5.0));
   };
 
-  // When changing modes, if moving TO split, set default slider to 50%.
   const handleModeChange = (mode) => {
     setActiveMode(mode);
     if (mode === 'split') {
-      setSliderValue(0.5); // Center the wipe separator
+      setSliderValue(0.5);
     } else if (mode === 'gradcam') {
-      setSliderValue(1.0); // Full opacity
-    }
-  };
-  const spatialMapVariants = {
-    docked: {
-      bottom: "2rem",
-      left: "2rem",
-      top: "auto",
-      right: "auto",
-      width: "280px",
-      height: "280px",
-      x: "0%",
-      y: "0%",
-      zIndex: 50,
-      opacity: 1,
-      scale: 1,
-    },
-    global: {
-      top: "50%",
-      left: "50%",
-      bottom: "auto",
-      right: "auto",
-      width: "100vw",
-      height: "100vh",
-      x: "-50%",
-      y: "-50%",
-      zIndex: 100,
-      opacity: 1,
-      scale: 1,
-    },
-    expanded: {
-      top: "50%",
-      left: "50%",
-      bottom: "auto",
-      right: "auto",
-      width: "80vw",
-      height: "80vh",
-      x: "-50%",
-      y: "-50%",
-      zIndex: 100,
-      opacity: 1,
-      scale: 1,
+      setSliderValue(1.0);
     }
   };
 
+  const spatialMapVariants = {
+    docked: {
+      bottom: "2rem", left: "2rem", top: "auto", right: "auto",
+      width: "280px", height: "280px",
+      x: "0%", y: "0%", zIndex: 50, opacity: 1, scale: 1,
+    },
+    global: {
+      top: "50%", left: "50%", bottom: "auto", right: "auto",
+      width: "100vw", height: "100vh",
+      x: "-50%", y: "-50%", zIndex: 100, opacity: 1, scale: 1,
+    },
+    expanded: {
+      top: "50%", left: "50%", bottom: "auto", right: "auto",
+      width: "80vw", height: "80vh",
+      x: "-50%", y: "-50%", zIndex: 100, opacity: 1, scale: 1,
+    }
+  };
+
+  // ==========================================
+  // RENDER
+  // ==========================================
   return (
     <div className="viewport-root">
       
@@ -250,13 +455,12 @@ function App() {
         >
           <motion.div
             className="mri-layer-group"
-            drag={zoomLevel > 1.0} // Only allow dragging if zoomed in
+            drag={zoomLevel > 1.0}
             dragConstraints={constraintsRef}
             animate={{ scale: zoomLevel }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             style={{ width: '100%', height: '100%', position: 'absolute' }}
           >
-            {/* Base Layer */}
             <img 
               src={`data:image/png;base64,${result.images[activeMode === 'enhanced' ? 'enhanced' : 'original']}`} 
               className="mri-layer base-layer" 
@@ -264,7 +468,6 @@ function App() {
               draggable="false"
             />
             
-            {/* AI Layer Logic */}
             {activeMode === 'split' ? (
                <>
                   <img 
@@ -292,7 +495,6 @@ function App() {
                />
             )}
             
-            {/* 2D TARGET HUD */}
             <TargetHUD location={selectedHotspot} />
           </motion.div>
         </div>
@@ -351,7 +553,7 @@ function App() {
             >
               <div className="metric-row">
                 <span className="metric-label">DIAGNOSIS</span>
-                <span className="metric-value" style={{ color: result.label === 'No Tumor' ? 'var(--success)' : 'var(--danger)' }}>
+                <span className="metric-value" style={{ color: getDiagnosisColor(result.label) }}>
                   {result.label !== 'No Tumor' ? result.label.toUpperCase() + ' DETECTED' : 'NO TUMOR'}
                 </span>
               </div>
@@ -359,6 +561,14 @@ function App() {
                 <span className="metric-label">CONFIDENCE</span>
                 <span className="metric-value accent-cyan">{(result.confidence * 100).toFixed(1)}%</span>
               </div>
+              {result.risk_metrics && result.label !== 'No Tumor' && (
+                <div className="metric-row">
+                  <span className="metric-label">RISK SCORE</span>
+                  <span className="metric-value" style={{ color: getRiskColor(result.risk_metrics.risk_score) }}>
+                    {result.risk_metrics.risk_score}/100
+                  </span>
+                </div>
+              )}
               <div className="metric-row">
                 <span className="metric-label">ZOOM STATE</span>
                 <span className="metric-value">{zoomLevel.toFixed(1)}x</span>
@@ -368,7 +578,7 @@ function App() {
         </AnimatePresence>
       </div>
 
-      {/* 3D SPATIAL COPILOT (CINEMATIC PHYSICS WRAPPER) */}
+      {/* 3D SPATIAL COPILOT */}
       <AnimatePresence>
         {(isAnalyzing || result) && (
           <motion.div 
@@ -414,7 +624,7 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* FLOATING TOP RIGHT - EXPORT */}
+      {/* FLOATING TOP RIGHT - ACTIONS */}
       <AnimatePresence>
         {result && (
           <motion.div 
@@ -422,10 +632,23 @@ function App() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <button className="hud-action-btn" onClick={generateReport} disabled={isExporting}>
-               <FileText size={16} /> 
-               {isExporting ? 'GENERATING...' : 'EXPORT REPORT'}
-            </button>
+            <div className="top-right-actions">
+              <button 
+                className="hud-action-btn prediction-btn"
+                onClick={() => setIsPredictionOpen(true)}
+                title="View Tumor Prediction Analysis"
+              >
+                <Scan size={16} /> 
+                PREDICTION
+                {result.label !== 'No Tumor' && (
+                  <span className="pred-badge-dot" />
+                )}
+              </button>
+              <button className="hud-action-btn" onClick={generateReport} disabled={isExporting}>
+                 <FileText size={16} /> 
+                 {isExporting ? 'GENERATING...' : 'EXPORT REPORT'}
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -498,14 +721,8 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* FLOATING BOTTOM RIGHT - NEXUS ORACLE */}
-      <AnimatePresence>
-        {result && (
-          <div className="hud-module bottom-right">
-            <RiskExplainerPanel />
-          </div>
-        )}
-      </AnimatePresence>
+      {/* PREDICTION ANALYSIS PANEL */}
+      <PredictionPanel />
 
       {/* OVERLAYS (Pulse Scan & PDF) */}
       <AnimatePresence>
